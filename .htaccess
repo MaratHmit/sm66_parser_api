@@ -1,0 +1,26 @@
+DirectoryIndex index.php
+AddDefaultCharset utf-8
+
+
+<Files .htaccess>
+order allow,deny
+deny from all
+</Files>
+
+RewriteEngine On
+Options +FollowSymLinks 
+RewriteBase /api
+
+php_value session.gc_maxlifetime 86400
+
+RewriteRule ^(.*)$  index.php?%{QUERY_STRING}
+
+php_flag display_startup_errors on
+php_flag display_errors on
+php_flag html_errors on
+php_value docref_root 0
+php_value docref_ext 0
+
+# enable PHP error logging
+php_flag  log_errors on
+php_value error_log  /home/e/edgestile/sm66.e-stile.ru/public_html/api/PHP_errors.log
