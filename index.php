@@ -5,6 +5,7 @@ $allowedMethods = array('FETCH', 'POST', 'DELETE', 'SAVE', 'INFO', 'GET', 'UPLOA
 $allowedMethods = implode(",", $allowedMethods);
 
 $headers = getallheaders();
+$headers['Secookie'] = empty($headers['Secookie']) ? $headers['secookie'] : $headers['Secookie'];
 if (!empty($headers['Secookie']))
     session_id($headers['Secookie']);
 session_start();
@@ -15,7 +16,7 @@ ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 
 define('API_ROOT', $_SERVER['DOCUMENT_ROOT'] . '/api/');
-define('API_ROOT_URL', "http://" . $_SERVER['SERVER_NAME'] . "/api");
+define('API_ROOT_URL', "https://" . $_SERVER['SERVER_NAME'] . "/api");
 define('AUTH_SERVER', "https://api.siteedit.ru");
 
 function writeLog($data)
@@ -42,7 +43,7 @@ if (!empty($origin)) {
     $url = parse_url($origin);
     if ($url) {
         if ($url['host'] == 'sm66.e-stile.ru')
-            header("Access-Control-Allow-Origin: http://sm66.e-stile.ru");
+            header("Access-Control-Allow-Origin: https://66sm.ru");
         if ($url['host'] == 'localhost' && $url['port'] == 1338)
             header("Access-Control-Allow-Origin: http://localhost:1338");
         header("Access-Control-Allow-Credentials: true");
@@ -52,6 +53,7 @@ if (!empty($origin)) {
     if ($apiMethod == "OPTIONS")
         exit;
 }
+
 
 if ($apiClass == "Auth" && strtolower($apiMethod) == "logout") {
     $_SESSION = array();

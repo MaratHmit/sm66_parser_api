@@ -16,13 +16,13 @@ class Base extends CustomBase
     protected $availableFields;
     protected $filterFields;
     protected $search;
-    protected $filters = [];
+    protected $filters = array();
     protected $tableName;
     protected $tableAlias;
     protected $allowedSearch = true;
     protected $availableSigns = array("=", "<=", "<", ">", ">=", "IN", "<>");
     protected $isNew;
-    private $patterns = [];
+    private $patterns = array();
 
     function __construct($input = null)
     {
@@ -34,7 +34,7 @@ class Base extends CustomBase
         $this->sortBy = $input["sortBy"] ? $input["sortBy"] : $this->sortBy;
         $this->search = $input["searchText"] && $this->allowedSearch ? $input["searchText"] : null;
         $this->filters = empty($this->input["filters"]) || !is_array($this->input["filters"]) ?
-            [] : $this->input["filters"];
+            array() : $this->input["filters"];
         if (!empty($this->input["id"]) && empty($this->input["ids"]))
             $this->input["ids"] = array($this->input["id"]);
         $this->isNew = empty($this->input["id"]) && empty($this->input["ids"]);
@@ -47,7 +47,7 @@ class Base extends CustomBase
 
     public function setFilters($filters)
     {
-        $this->filters = empty($filters) || !is_array($filters) ? [] : $filters;
+        $this->filters = empty($filters) || !is_array($filters) ? array() : $filters;
     }
 
     private function createTableForInfo($settings)
@@ -133,7 +133,7 @@ class Base extends CustomBase
 
     protected function getAddInfo()
     {
-        return [];
+        return array();
     }
 
     public function delete()
@@ -196,7 +196,7 @@ class Base extends CustomBase
         return true;
     }
 
-    protected function correctValuesBeforeFetch($items = [])
+    protected function correctValuesBeforeFetch($items = array())
     {
         return $items;
     }
@@ -208,7 +208,7 @@ class Base extends CustomBase
 
     protected function getSettingsFetch()
     {
-        return [];
+        return array();
     }
 
     protected function getSettingsFind()
@@ -218,12 +218,12 @@ class Base extends CustomBase
 
     protected function getSettingsInfo()
     {
-        return [];
+        return array();
     }
 
     protected function getPattensBySelect($selectQuery)
     {
-        $result = [];
+        $result = array();
         preg_match_all('/\w+[.]+\w+\s\w+/', $selectQuery, $matches);
         if (count($matches) && count($matches[0])) {
             foreach ($matches[0] as $match) {
@@ -306,7 +306,7 @@ class Base extends CustomBase
     /*
         protected function getSearchQuery($searchFields = [])
         {
-            $result = [];
+            $result = array();
             $searchItem = trim($this->search);
             if (empty($searchItem))
                 return $result;
@@ -367,8 +367,8 @@ class Base extends CustomBase
     */
     protected function getFilterQuery()
     {
-        $where = [];
-        $filters = [];
+        $where = array();
+        $filters = array();
         if (!empty($this->filters["field"]))
             $filters[] = $this->filters;
         else $filters = $this->filters;
@@ -401,7 +401,7 @@ class Base extends CustomBase
         return implode(" AND ", $where);
     }
 
-    protected function getWhereQuery($searchFields = [])
+    protected function getWhereQuery($searchFields = array())
     {
         $query = null;
         $searchQuery = $this->getSearchQuery($searchFields);
@@ -421,16 +421,16 @@ class Base extends CustomBase
         if (!file_exists($file))
             return null;
 
-        $result = [];
+        $result = array();
         if (($handle = fopen($file, "r")) !== FALSE) {
             $i = 0;
-            $keys = [];
+            $keys = array();
             while (($row = fgetcsv($handle, 10000, $csvSeparator)) !== FALSE) {
                 if (!$i) {
                     foreach ($row as &$item)
                         $keys[] = iconv('CP1251', 'utf-8', $item);
                 } else {
-                    $object = [];
+                    $object = array();
                     $j = 0;
                     foreach ($row as &$item) {
                         $object[$keys[$j]] = iconv('CP1251', 'utf-8', $item);
@@ -449,7 +449,7 @@ class Base extends CustomBase
     {
         $countFiles = count($_FILES);
         $ups = 0;
-        $items = [];
+        $items = array();
         $dir = DOCUMENT_ROOT . "/files";
         $url = !empty($_POST["url"]) ? $_POST["url"] : null;
         if (!file_exists($dir) || !is_dir($dir))

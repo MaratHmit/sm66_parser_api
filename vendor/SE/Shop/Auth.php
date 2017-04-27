@@ -8,11 +8,11 @@ use SE\Exception;
 class Auth extends Base
 {
 
-    public function getAuthData($data = [])
+    public function getAuthData($data = array())
     {
         $url = AUTH_SERVER . "/api/2/Auth/Register.api";
         $ch = curl_init($url);
-        $data["project"] =  str_replace(".e-stile.ru", "", HOSTNAME);
+        $data["project"] =  "sm66";
         $apiData = json_encode($data);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
         curl_setopt($ch, CURLOPT_POSTFIELDS, $apiData);
@@ -86,6 +86,6 @@ class Auth extends Base
 
     public function get()
     {
-        $this->result["permissions"] = [];
+        $this->result["permissions"] = array();
     }
 }
