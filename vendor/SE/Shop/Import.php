@@ -70,10 +70,9 @@ class Import extends Base
                 $db = new DB("shop_price", "sp");
                 $db->setValuesFields($product);
                 $db->save();
-
+                DB::query("UPDATE shop_price SET enabled = 'Y' WHERE marker_imp > 1 AND img IS NOT NULL");
                 DB::query("INSERT IGNORE INTO shop_img (id_price, picture, picture_alt, title)
                                SELECT id, img, img_alt, img_alt FROM shop_price sp WHERE sp.img IS NOT NULL");
-                DB::query("UPDATE shop_price SET enabled = 'Y' WHERE marker_imp > 1 AND img IS NOT NULL");
             }
             $_SESSION["import"]["indexImages"]++;
 
@@ -153,13 +152,12 @@ class Import extends Base
         }
 
         if ($_SESSION["percent"] == 100) {
-            /*
-            DB::query("UPDATE shop_price SET enabled = 'N' WHERE marker_imp = 1");
+            DB::query("UPDATE shop_price SET enabled = 'N'");
+            DB::query("UPDATE shop_price SET enabled = 'Y' WHERE marker_imp > 1 AND img IS NOT NULL");
             $d = new DB("shop_price", "sp");
             $d->select("sp.id, sp.article");
             $d->where("sp.img IS NULL AND sp.marker_imp > 1");
             $result = $d->getList();
-            */
             $content = json_encode($result);
             file_put_contents($this->dirFiles . "/goods_images.json", $content);
             $_SESSION["import"]["countImages"] = count($result);
