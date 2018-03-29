@@ -38,6 +38,8 @@ class Import extends Base
             $_SESSION["corporatePrice"] = (float)($this->input["corporatePrice"] + 100);
             $_SESSION["wholesalePrice"] = (float)($this->input["wholesalePrice"] + 100);
             $_SESSION["updatePrices"] = $this->input["updatePrices"];
+            $_SESSION["updateGroups"] = $this->input["updateGroups"];
+            $_SESSION["incPrices"] = $this->input["incPrices"];
             $_SESSION["percent"] = 0;
             $_SESSION["countRows"] = $this->getCountRows($filePath);
             $this->result = array("countRows" => $_SESSION["countRows"]);
@@ -71,6 +73,7 @@ class Import extends Base
                 $db->setValuesFields($product);
                 $db->save();
                 DB::query("UPDATE shop_price SET enabled = 'Y' WHERE marker_imp > 1 AND img IS NOT NULL");
+                DB::query("UPDATE shop_price SET oz_parse = 0");
                 DB::query("INSERT IGNORE INTO shop_img (id_price, picture, picture_alt, title)
                                SELECT id, img, img_alt, img_alt FROM shop_price sp WHERE sp.img IS NOT NULL");
             }
@@ -163,6 +166,7 @@ class Import extends Base
             $_SESSION["import"]["countImages"] = count($result);
             return array(
                 "percentGoods" => (int)$_SESSION["percent"],
+                "countGoods" => (int)$_SESSION["import"]["countGoods"],
                 "countInsert" => (int)$_SESSION["import"]["countInsert"],
                 "countUpdate" => (int)$_SESSION["import"]["countUpdate"],
                 "countImages" => (int)$_SESSION["import"]["countImages"]
@@ -172,12 +176,13 @@ class Import extends Base
         return array("percentGoods" => $_SESSION["percent"]);
     }
 
-
     private function importProduct($row)
     {
         $data["article"] = $row[0];
         if (empty($data["article"]))
             return;
+
+        $_SESSION["import"]["countGoods"]++;
 
         $data["pricePurchase"] = (float)$row[5];
         $data["price"] = $data["pricePurchase"] * $_SESSION["retailPrice"] / 100;
@@ -189,15 +194,20 @@ class Import extends Base
             else $data["flagHit"] = "Y";
         }
 
-        try {
+        try {        	
             $db = new DB("shop_price", "sp");
-            $db->select("sp.id, sp.img, flag_hit, flag_new, sdl.discount_id, special_price");
+            $db->select("sp.id, sp.img, flag_hit, flag_new, sdl.discount_id, sp.special_price, sp.oz_exist, sg.source_price");
             $db->leftJoin("shop_discount_links sdl", "sp.id = sdl.id_price");
-            $db->where("sp.article = '?'", $data["article"]);
+            $db->leftJoin("shop_price_group spg", "sp.id = spg.id_price");
+            $db->leftJoin("shop_group sg", "spg.id_group = sg.id");
+            $db->where("sp.code = '?'", $data["article"]);
             $result = $db->fetchOne();
 
+            $isUpdatePrice = true;
+
             if (empty($result)) {
-                $data["idGroup"] = $_SESSION["import"]["idGroup"];
+                if ($_SESSION["import"]["idGroup"])
+                    $data["idGroup"] = $_SESSION["import"]["idGroup"];
                 $data["code"] = $row[0];
                 $data["name"] = $row[1];
                 $data["idBrand"] = $this->getIdBrand($row[3]);
@@ -206,19 +216,37 @@ class Import extends Base
                 $data["markerImp"] = 2;
                 $_SESSION["import"]["countInsert"]++;
             } else {
+                if ($result["ozExist"] && ($result["sourcePrice"] == "OFFICE_ZAKAZ")) {
+                    unset($data["flagHit"]);
+                    unset($data["specialPrice"]);
+                    unset($data["price"]);
+                    unset($data["priceOpt"]);
+                    unset($data["priceOptCorp"]);
+                    $isUpdatePrice = false;
+                }
+
                 if (!$_SESSION["updatePrices"] &&
                     ($result["flagHit"] == "Y" || $result["flagNew"] == "Y" || $result["discountId"])) {
                     unset($data["flagHit"]);
                     unset($data["specialPrice"]);
                     unset($data["price"]);
                     unset($data["priceOpt"]);
-                    unset($data["priceOptCorp"]);
+                    unset($data["priceOptCorp"]);                    
+                  	$isUpdatePrice = false;
                 }
 
                 $data["id"] = $result["id"];
-                $data["idGroup"] = $_SESSION["import"]["idGroup"];
+                if ($_SESSION['updateGroups'])
+                    $data["idGroup"] = $_SESSION["import"]["idGroup"];
                 $data["markerImp"] = 3;
                 $_SESSION["import"]["countUpdate"]++;
+            }
+
+            if (!$_SESSION["incPrices"] && $isUpdatePrice) {
+                list($pricePercent, $priceOptCorpPercent, $priceOptPercent) = $this->getPercentGroup($_SESSION["import"]["idGroup"]);
+                $data["price"] = $data["pricePurchase"] * (100 + $pricePercent) / 100;
+                $data["priceOpt"] = $data["pricePurchase"] * (100 + $priceOptPercent) / 100;
+                $data["priceOptCorp"] = $data["pricePurchase"] * (100 + $priceOptCorpPercent) / 100;               
             }
 
             $db = new DB("shop_price", "sp");
@@ -254,6 +282,8 @@ class Import extends Base
             return;
 
         $data["name"] = trim($row[1]);
+        $data["name"] = str_replace("«", '"', $data["name"]);
+        $data["name"] = str_replace("»", '"', $data["name"]);
 
         $db = new DB("shop_group", "sg");
         $db->select("sg.id, sg.upid, sg.name");
@@ -265,22 +295,24 @@ class Import extends Base
         */
         $result = $db->fetchOne();
         if (empty($result)) {
-            $data["upid"] = null;
-            if ($_SESSION["import"]["isGroup"]) {
-                $db = new DB("shop_group", "sg");
-                $db->setValuesFields(array("id" => $_SESSION["import"]["idGroup"], "upid" => null));
-                $db->save();
-                $_SESSION["import"]["idGroupParent"] = $_SESSION["import"]["idGroup"];
-            }
-            if ($_SESSION["import"]["idGroupParent"])
-                $data["upid"] = $_SESSION["import"]["idGroupParent"];
+            if ($_SESSION["updateGroups"]) {
+                $data["upid"] = null;
+                if ($_SESSION["import"]["isGroup"]) {
+                    $db = new DB("shop_group", "sg");
+                    $db->setValuesFields(array("id" => $_SESSION["import"]["idGroup"], "upid" => null));
+                    $db->save();
+                    $_SESSION["import"]["idGroupParent"] = $_SESSION["import"]["idGroup"];
+                }
+                if ($_SESSION["import"]["idGroupParent"])
+                    $data["upid"] = $_SESSION["import"]["idGroupParent"];
 
-            $db = new DB("shop_group", "sg");
-            $data["codeGr"] = strtolower(se_translite_url($data["name"]));
-            $data["codeGr"] = $this->getCodeGroup($data["codeGr"]);
-            $db->setValuesFields($data);
-            $data["id"] = $db->save();
-            self::saveIdParent($data["id"], $data["upid"]);
+                $db = new DB("shop_group", "sg");
+                $data["codeGr"] = strtolower(se_translite_url($data["name"]));
+                $data["codeGr"] = $this->getCodeGroup($data["codeGr"]);
+                $db->setValuesFields($data);
+                $data["id"] = $db->save();
+                self::saveIdParent($data["id"], $data["upid"]);
+            }
 
         } else {
             $data["id"] = $result["id"];
@@ -308,6 +340,27 @@ class Import extends Base
         return uniqid();
     }
 
+    private function getPercentGroup($idGroup)
+    {
+        if (empty($idGroup))
+            return array(0, 0, 0);
+
+        $u = new DB('shop_group_inc_price', 'sgi');
+        $u->select('sgi.*');
+        $u->where('sgi.id_group = ?', $idGroup);
+        $result = $u->fetchOne();
+        if (empty($result["id"])) {
+        	$u = new DB('shop_group', 'sg');
+        	$u->select('sg.upid');
+        	$u->where('sg.id = ?', $idGroup);
+        	$group = $u->fetchOne();
+        	if ($group && $group["upid"])
+        		return $this->getPercentGroup($group["upid"]);
+        	return array(0, 0, 0);	
+        }
+
+        return array((int)$result["price"], (int)$result["priceOptCorp"], (int)$result["priceOpt"]);
+    }
 
     static public function getLevel($id)
     {
@@ -360,18 +413,18 @@ class Import extends Base
 
     private function getIdBrand($name)
     {
-        $name = trim($name);
-        if (empty($name))
+        $code = strtolower(se_translite_url($name));
+        if (empty($code))
             return null;
 
         $db = new DB("shop_brand", "sb");
         $db->select("sb.id");
-        $db->where("sb.name = '?'", $name);
+        $db->where("sb.code = '?'", $code);
         $result = $db->fetchOne();
         if (empty($result)) {
             $db = new DB("shop_brand", "sb");
             $data["name"] = $name;
-            $data["code"] = strtolower(se_translite_url($name));
+            $data["code"] = $code;
             $db->setValuesFields($data);
             return $db->save();
         } else return $result["id"];
@@ -380,28 +433,79 @@ class Import extends Base
     private function getImage($code)
     {
         $result = null;
-        $url = "http://www.samsonopt.ru/ajax/detail_img.php?CODE={$code}&TYPE=IMG";
-        $file = md5($code) . ".jpg";
-        $pathFile = $this->dirImages . "/{$file}";
-        if (file_exists($pathFile)) {
-            $image = file_get_contents($pathFile);
-            if (!empty($image) && strlen($image) > 128)
-                return $file;
-        }
+        $url = "https://www.samsonopt.ru/ajax/detail_img.php?CODE={$code}&TYPE=IMG";
+
+        $cookie = dirname(__FILE__) . "/cookies_images.txt";
 
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_URL, $url);
+        curl_setopt($curl, CURLOPT_HEADER, 1);
+        curl_setopt($curl, CURLOPT_NOBODY, 1);
         curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 10);
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($curl, CURLOPT_FOLLOWLOCATION, 1);
+        curl_setopt($curl, CURLOPT_FOLLOWLOCATION, 0);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 0);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 0);
+        curl_setopt($curl, CURLOPT_FAILONERROR, 1);
+        curl_setopt($curl, CURLOPT_COOKIEJAR, $cookie);
+        curl_setopt($curl, CURLOPT_COOKIEFILE, $cookie);
         curl_setopt($curl, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 6.3; WOW64; rv:42.0) Gecko/20100101 Firefox/42.0');
-        $image = curl_exec($curl);
+        $answer = curl_exec($curl);
         curl_close($curl);
 
-        if (!empty($image) && strlen($image) > 128) {
-            $result = $file;
-            file_put_contents($this->dirImages . "/{$result}", $image);
+
+        $headers = explode("\n", $answer);
+        foreach ($headers as $header) {
+            if (empty($header))
+                continue;
+
+            if (strpos($header, ': ')) {
+                $header = explode(": ", $header);
+                if ($header[0] == "Location") {
+
+                    $url = trim($header[1]);
+
+                    echo $url . "\n";
+
+                    $curl = curl_init();
+                    curl_setopt($curl, CURLOPT_URL, $url);
+                    curl_setopt($curl, CURLOPT_HEADER, 0);
+                    curl_setopt($curl, CURLOPT_NOBODY, 0);
+                    curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 10);
+                    curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+                    curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 0);
+                    curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 0);
+                    curl_setopt($curl, CURLOPT_FAILONERROR, 1);
+                    curl_setopt($curl, CURLOPT_FOLLOWLOCATION, 1);
+                    curl_setopt($curl, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 6.3; WOW64; rv:42.0) Gecko/20100101 Firefox/42.0');
+                    $image = curl_exec($curl);
+
+                    if (curl_errno($curl)) {
+                        echo curl_error($curl) . "\n";
+                        return null;
+                    }
+
+                    curl_close($curl);
+
+                    $file = array_pop(explode("/", $url));
+                    $pathFile =  "/home/e/edgestile/sm66.e-stile.ru/public_html/images/rus/shopprice/{$file}";
+
+                    if (file_exists($pathFile) && (getimagesize($pathFile) > 14291))
+                        return $file;
+
+                    if (!empty($image)) {
+                        file_put_contents($pathFile, $image);
+                        echo $pathFile . "\n";
+                        if (!getimagesize($pathFile))
+                            unlink($pathFile);
+                        else $result = $file;
+                    }
+
+                }
+            }
         }
+
+        sleep(1);
 
         return $result;
     }
